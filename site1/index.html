@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #140518 30%, #1a0a2e 60%, #0d0d0d 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(circle at 15% 25%, rgba(138, 43, 226, 0.1) 0%, transparent 45%),
+                radial-gradient(circle at 85% 75%, rgba(75, 0, 130, 0.08) 0%, transparent 45%),
+                radial-gradient(circle at 50% 50%, rgba(147, 51, 234, 0.05) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            width: 100%;
+            max-width: 900px;
+            padding: 0 20px;
+        }
+
+        .title {
+            color: #e9d5ff;
+            font-size: 2.5rem;
+            font-weight: 300;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            text-shadow: 0 0 30px rgba(147, 51, 234, 0.5), 0 0 60px rgba(147, 51, 234, 0.2);
+            animation: glow 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 30px rgba(147, 51, 234, 0.5), 0 0 60px rgba(147, 51, 234, 0.2); }
+            to { text-shadow: 0 0 45px rgba(147, 51, 234, 0.8), 0 0 90px rgba(147, 51, 234, 0.35); }
+        }
+
+        /* ===== 视频主区域 ===== */
+        .video-main {
+            position: relative;
+            width: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 0 60px rgba(138, 43, 226, 0.3), 0 0 120px rgba(138, 43, 226, 0.1);
+            transition: box-shadow 0.4s ease;
+        }
+
+        .video-main:hover {
+            box-shadow: 0 0 80px rgba(138, 43, 226, 0.5), 0 0 160px rgba(138, 43, 226, 0.15);
+        }
+
+        .video-main video {
+            display: block;
+            width: 100%;
+            height: auto;
+            border-radius: 16px;
+        }
+
+        .play-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            transition: opacity 0.4s ease, background 0.4s ease;
+            z-index: 2;
+        }
+
+        .play-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .play-overlay:hover {
+            background: rgba(0, 0, 0, 0.35);
+        }
+
+        .play-button {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 40px rgba(124, 58, 237, 0.6), 0 0 80px rgba(124, 58, 237, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+        }
+
+        .play-button::before {
+            content: '';
+            position: absolute;
+            top: -4px;
+            left: -4px;
+            right: -4px;
+            bottom: -4px;
+            border-radius: 50%;
+            border: 2px solid rgba(124, 58, 237, 0.4);
+            animation: pulse 2s ease-out infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.35); opacity: 0; }
+        }
+
+        .play-overlay:hover .play-button {
+            transform: scale(1.1);
+            box-shadow: 0 0 60px rgba(124, 58, 237, 0.8), 0 0 120px rgba(124, 58, 237, 0.3);
+        }
+
+        .play-icon {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 16px 0 16px 28px;
+            border-color: transparent transparent transparent #ffffff;
+            margin-left: 5px;
+        }
+
+        /* ===== 底部控制条（嵌入视频区域） ===== */
+        .controls-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 60%, transparent 100%);
+            z-index: 3;
+            transition: opacity 0.3s ease;
+        }
+
+        .controls-bar.auto-hide {
+            opacity: 0;
+        }
+
+        .video-main:hover .controls-bar.auto-hide,
+        .controls-bar.auto-hide:hover {
+            opacity: 1;
+        }
+
+        .control-btn {
+            background: transparent;
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            color: #c4b5fd;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            font-family: inherit;
+            flex-shrink: 0;
+        }
+
+        .control-btn:hover {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: rgba(139, 92, 246, 0.7);
+            color: #e9d5ff;
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.2);
+        }
+
+        /* 全屏按钮 */
+        .fullscreen-btn {
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+        }
+
+        .fullscreen-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        .progress-container {
+            flex: 1;
+            height: 4px;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #7c3aed, #a78bfa);
+            border-radius: 2px;
+            transition: width 0.1s linear;
+        }
+
+        .time-display {
+            color: #a78bfa;
+            font-size: 0.75rem;
+            font-variant-numeric: tabular-nums;
+            min-width: 90px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        /* ===== 倍速控制（视频外部） ===== */
+        .speed-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .speed-label {
+            color: #a78bfa;
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        .speed-group {
+            display: flex;
+            gap: 6px;
+        }
+
+        .speed-btn {
+            background: transparent;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            color: #c4b5fd;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-variant-numeric: tabular-nums;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            font-family: inherit;
+        }
+
+        .speed-btn:hover {
+            border-color: rgba(139, 92, 246, 0.6);
+            color: #e9d5ff;
+            background: rgba(139, 92, 246, 0.08);
+        }
+
+        .speed-btn.active {
+            background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%);
+            border-color: transparent;
+            color: #ffffff;
+            box-shadow: 0 0 15px rgba(124, 58, 237, 0.5);
+        }
+
+        /* ===== 全屏模式样式 ===== */
+        .video-main:fullscreen {
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .video-main:fullscreen video {
+            border-radius: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+        }
+
+        .video-main:-webkit-full-screen {
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .video-main:-webkit-full-screen video {
+            border-radius: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">Video Player</h1>
+
+        <div class="video-main" id="videoMain">
+            <video id="video" src="video/3.mp4" preload="metadata"></video>
+
+            <div class="play-overlay" id="playOverlay">
+                <div class="play-button">
+                    <div class="play-icon"></div>
+                </div>
+            </div>
+
+            <!-- 底部控制条 -->
+            <div class="controls-bar" id="controlsBar">
+                <button class="control-btn" id="playPauseBtn">Play</button>
+                <div class="time-display" id="timeDisplay">00:00 / 00:00</div>
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <!-- 全屏按钮 -->
+                <button class="control-btn fullscreen-btn" id="fullscreenBtn" title="全屏">
+                    <svg viewBox="0 0 24 24" id="fsIcon">
+                        <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 倍速控制 -->
+        <div class="speed-section">
+            <span class="speed-label">Speed</span>
+            <div class="speed-group" id="speedGroup">
+                <button class="speed-btn" data-speed="0.5">0.5x</button>
+                <button class="speed-btn active" data-speed="1">1x</button>
+                <button class="speed-btn" data-speed="1.25">1.25x</button>
+                <button class="speed-btn" data-speed="1.5">1.5x</button>
+                <button class="speed-btn" data-speed="2">2x</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const videoMain = document.getElementById('videoMain');
+        const playOverlay = document.getElementById('playOverlay');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progressContainer = document.getElementById('progressContainer');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const fsIcon = document.getElementById('fsIcon');
+        const controlsBar = document.getElementById('controlsBar');
+        const speedBtns = document.querySelectorAll('.speed-btn');
+
+        let hideTimer = null;
+
+        // 全屏图标 SVG
+        const iconFullscreen = '<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>';
+        const iconExitFullscreen = '<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>';
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+        }
+
+        function togglePlay() {
+            if (video.paused) {
+                video.play();
+                playOverlay.classList.add('hidden');
+                playPauseBtn.textContent = 'Pause';
+            } else {
+                video.pause();
+                playOverlay.classList.remove('hidden');
+                playPauseBtn.textContent = 'Play';
+            }
+        }
+
+        playOverlay.addEventListener('click', togglePlay);
+        playPauseBtn.addEventListener('click', togglePlay);
+        video.addEventListener('click', togglePlay);
+
+        video.addEventListener('timeupdate', () => {
+            const progress = (video.currentTime / video.duration) * 100;
+            progressBar.style.width = progress + '%';
+            timeDisplay.textContent = formatTime(video.currentTime) + ' / ' + formatTime(video.duration || 0);
+        });
+
+        video.addEventListener('ended', () => {
+            playOverlay.classList.remove('hidden');
+            playPauseBtn.textContent = 'Play';
+            progressBar.style.width = '0%';
+        });
+
+        video.addEventListener('loadedmetadata', () => {
+            timeDisplay.textContent = '00:00 / ' + formatTime(video.duration);
+        });
+
+        progressContainer.addEventListener('click', (e) => {
+            const rect = progressContainer.getBoundingClientRect();
+            const pos = (e.clientX - rect.left) / rect.width;
+            video.currentTime = pos * video.duration;
+        });
+
+        // ===== 倍速控制 =====
+        speedBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const speed = parseFloat(btn.dataset.speed);
+                video.playbackRate = speed;
+                speedBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+
+        // ===== 全屏控制 =====
+        function isFullscreen() {
+            return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                      document.mozFullScreenElement || document.msFullscreenElement);
+        }
+
+        function enterFullscreen() {
+            const el = videoMain;
+            if (el.requestFullscreen) el.requestFullscreen();
+            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
+            else if (el.msRequestFullscreen) el.msRequestFullscreen();
+        }
+
+        function exitFullscreen() {
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+            else if (document.msExitFullscreen) document.msExitFullscreen();
+        }
+
+        function toggleFullscreen() {
+            if (isFullscreen()) {
+                exitFullscreen();
+            } else {
+                enterFullscreen();
+            }
+        }
+
+        fullscreenBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleFullscreen();
+        });
+
+        // 全屏状态变化监听
+        function onFullscreenChange() {
+            if (isFullscreen()) {
+                fsIcon.innerHTML = iconExitFullscreen;
+                controlsBar.classList.add('auto-hide');
+                resetHideTimer();
+            } else {
+                fsIcon.innerHTML = iconFullscreen;
+                controlsBar.classList.remove('auto-hide');
+                clearTimeout(hideTimer);
+            }
+        }
+
+        document.addEventListener('fullscreenchange', onFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+        document.addEventListener('mozfullscreenchange', onFullscreenChange);
+        document.addEventListener('MSFullscreenChange', onFullscreenChange);
+
+        // 全屏时自动隐藏控制条
+        function resetHideTimer() {
+            if (!isFullscreen()) return;
+            clearTimeout(hideTimer);
+            controlsBar.style.opacity = '1';
+            hideTimer = setTimeout(() => {
+                controlsBar.style.opacity = '0';
+            }, 3000);
+        }
+
+        videoMain.addEventListener('mousemove', resetHideTimer);
+        controlsBar.addEventListener('mousemove', () => {
+            clearTimeout(hideTimer);
+            controlsBar.style.opacity = '1';
+        });
+
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ' || e.key === 'k') {
+                e.preventDefault();
+                togglePlay();
+            }
+            if (e.key === 'f') {
+                toggleFullscreen();
+            }
+            if (e.key === 'ArrowRight') {
+                video.currentTime = Math.min(video.currentTime + 5, video.duration);
+            }
+            if (e.key === 'ArrowLeft') {
+                video.currentTime = Math.max(video.currentTime - 5, 0);
+            }
+        });
+    </script>
+</body>
+</html>
